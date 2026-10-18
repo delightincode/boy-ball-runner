@@ -1,7 +1,10 @@
 ﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+import fullscreenIcon from '../fullscreen-icon.png';
 import gameConfig from '../config.json';
+import bgMusicUrl from '../bg-music.mp3';
+import kickSoundUrl from '../ball-kick.mp3';
 
 const WIDTH = 900;
 const HEIGHT = 420;
@@ -95,22 +98,56 @@ function drawObstacle(ctx, obstacle) {
 
 function Game() {
   const canvasRef = useRef(null);
+  const gameWrapRef = useRef(null);
   const gameRef = useRef(null);
+  const musicRef = useRef(null);
+  const kickAudioRef = useRef(null);
   const [status, setStatus] = useState('ready');
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(() => Number(localStorage.getItem('boy-ball-best') || 0));
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [fullscreenMode, setFullscreenMode] = useState(false);
+
+  useEffect(() => {
+    const music = new Audio(bgMusicUrl);
+    music.loop = true;
+    music.volume = gameConfig.audio.backgroundVolume;
+    const kickSound = new Audio(kickSoundUrl);
+    kickSound.volume = gameConfig.audio.kickVolume;
+    musicRef.current = music;
+    kickAudioRef.current = kickSound;
+    return () => {
+      music.pause();
+      music.currentTime = 0;
+      musicRef.current = null;
+      kickAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const music = musicRef.current;
+    if (!music) return;
+    if (status === 'playing' && musicEnabled) music.play().catch(() => {});
+    else music.pause();
+  }, [status, musicEnabled]);
 
   const startGame = useCallback(() => {
+    if (musicEnabled && musicRef.current?.paused) musicRef.current.play().catch(() => {});
     gameRef.current = { running: true, over: false, score: 0, speed: gameConfig.obstacles.startSpeed, boyY: GROUND - 118, ballY: GROUND - gameConfig.ball.restingOffset, ballVY: 0, ballX: 125, ballSpin: 0, kick: 0, obstacles: [], spawn: gameConfig.obstacles.initialSpawnFrames, frame: 0, clouds: [{x: 120,y:78,s:1},{x:430,y:115,s:.75},{x:760,y:64,s:1.1}], groundShift: 0 };
     setScore(0); setStatus('playing');
-  }, []);
+  }, [musicEnabled]);
 
   const kickBall = useCallback(() => {
     const g = gameRef.current;
     if (!g || !g.running || g.over) return;
-    // Nhấn đúng nhịp khi bóng gần chân sẽ đưa bóng qua chướng ngại vật.
-    const nearFoot = g.ballY > GROUND - gameConfig.ball.nearFootThreshold;
-    g.ballVY = nearFoot ? -gameConfig.ball.jumpVelocity : Math.min(g.ballVY - gameConfig.ball.airKickBoost, -gameConfig.ball.minimumAirKickVelocity);
+
+    const restingY = GROUND - gameConfig.ball.restingOffset;
+    const ballIsGrounded = g.ballY >= restingY - 0.5 && g.ballVY >= 0;
+    if (!ballIsGrounded) return;
+
+    const kickSound = kickAudioRef.current;
+    if (kickSound) { kickSound.currentTime = 0; kickSound.play().catch(() => {}); }
+    g.ballVY = -gameConfig.ball.jumpVelocity;
     g.kick = 1;
   }, []);
 
@@ -118,6 +155,7 @@ function Game() {
     const onKey = (e) => {
       if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) {
         e.preventDefault();
+        if (e.repeat) return;
         if (status !== 'playing') startGame(); else kickBall();
       }
     };
@@ -200,21 +238,65 @@ function Game() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      const gameWrap = gameWrapRef.current;
+      setFullscreenMode(Boolean(gameWrap && (document.fullscreenElement === gameWrap || document.webkitFullscreenElement === gameWrap)));
+    };
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    document.addEventListener('webkitfullscreenchange', syncFullscreenState);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState);
+      document.removeEventListener('webkitfullscreenchange', syncFullscreenState);
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const gameWrap = gameWrapRef.current;
+    if (!gameWrap) return;
+    const isNativeFullscreen = document.fullscreenElement === gameWrap || document.webkitFullscreenElement === gameWrap;
+    if (isNativeFullscreen) {
+      if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      return;
+    }
+    if (fullscreenMode) { setFullscreenMode(false); return; }
+    try {
+      const requestFullscreen = gameWrap.requestFullscreen || gameWrap.webkitRequestFullscreen;
+      if (requestFullscreen) {
+        await requestFullscreen.call(gameWrap);
+        setFullscreenMode(true);
+        try { await screen.orientation?.lock?.('landscape'); } catch {}
+        return;
+      }
+    } catch {}
+    setFullscreenMode(true);
+  }, [fullscreenMode]);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape' && fullscreenMode && !document.fullscreenElement && !document.webkitFullscreenElement) setFullscreenMode(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [fullscreenMode]);
+
   const isOver = status === 'over';
   return <main className="page">
-    <header className="topbar"><a className="brand" href="#"><span className="brand-ball">⚽</span> SÂN CHƠI NHỎ</a><span className="top-note">Một chút khéo léo, thật nhiều niềm vui!</span></header>
-    <section className="game-wrap">
+    <header className="topbar"><a className="brand" href="#"><span className="brand-ball">⚽</span> SÂN CHƠI NHỎ</a><span className="top-note">Một chút khéo léo, thật nhiều niềm vui!</span><button type="button" className="music-toggle" aria-pressed={musicEnabled} onClick={() => setMusicEnabled((enabled) => !enabled)}>{musicEnabled ? 'Nhạc: bật' : 'Nhạc: tắt'}</button></header>
+    <section ref={gameWrapRef} className={fullscreenMode ? 'game-wrap game-fullscreen' : 'game-wrap'}>
       <div className="eyebrow"><span className="live-dot" /> GAME VƯỢT CHƯỚNG NGẠI</div>
       <h1>Cậu Bé <span>Tâng Bóng</span></h1>
       <p className="subtitle">Canh đúng nhịp, tâng bóng qua chướng ngại vật nhé!</p>
       <div className="scorebar"><div className="score-card"><span>ĐIỂM</span><strong>{String(score).padStart(4,'0')}</strong></div><div className="best-card"><span>🏆 KỶ LỤC</span><strong>{String(best).padStart(4,'0')}</strong></div></div>
+      <p className="rotate-hint">Rotate your iPhone sideways for a larger game view.</p>
       <div className="canvas-shell">
         <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} aria-label="Màn chơi cậu bé tâng bóng" onPointerDown={() => status === 'playing' ? kickBall() : startGame()} />
         {status !== 'playing' && <div className="overlay"><div className="overlay-card">
           <div className="overlay-icon">{isOver ? '💫' : '⚽'}</div>
           <h2>{isOver ? 'Ôi, hụt mất rồi!' : 'Sẵn sàng tâng bóng?'}</h2>
           <p>{isOver ? `Bạn ghi được ${score} điểm. Thử lại để lập kỷ lục mới nhé!` : 'Bấm đúng lúc để đưa bóng bay qua vật cản.'}</p>
-          <button className="play-button" onClick={startGame}>{isOver ? 'Chơi lại' : 'Bắt đầu chơi'} <span>→</span></button>
+          <div className="overlay-actions"><button className="play-button" onClick={startGame}>{isOver ? 'Chơi lại' : 'Bắt đầu chơi'} <span>→</span></button><button type="button" className="fullscreen-toggle" onClick={toggleFullscreen} aria-label={fullscreenMode ? 'Exit fullscreen' : 'Open fullscreen'} title={fullscreenMode ? 'Exit fullscreen' : 'Open fullscreen'}><img src={fullscreenIcon} alt="" /></button></div>
         </div></div>}
       </div>
       <div className="instructions"><div className="key-hint"><kbd>SPACE</kbd><kbd>↑</kbd><span>Tâng bóng</span></div><span className="hint-divider"/><span className="mobile-hint">Hoặc chạm vào màn hình</span><span className="desktop-hint">Nhấn đúng nhịp khi bóng gần chân</span></div>

@@ -14,14 +14,15 @@
   "ball": {
     "restingOffset": 19,
     "jumpVelocity": 12.8,
-    "airKickBoost": 3.4,
-    "minimumAirKickVelocity": 8.5,
     "gravity": 0.52,
-    "nearFootThreshold": 72,
     "clearanceHeight": 50
   },
   "scoring": {
     "pointsPerFrame": 0.12,
     "pointsPerObstacle": 20
+  },
+  "audio": {
+    "backgroundVolume": 0.85,
+    "kickVolume": 1
   }
 }
