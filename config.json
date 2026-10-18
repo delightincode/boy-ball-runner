@@ -23,7 +23,6 @@
     "pointsPerObstacle": 20
   },
   "audio": {
-    "backgroundVolume": 0.85,
-    "kickVolume": 1
+    "backgroundVolume": 0.85
   }
 }

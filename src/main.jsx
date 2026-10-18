@@ -4,7 +4,6 @@ import './style.css';
 import fullscreenIcon from '../fullscreen-icon.png';
 import gameConfig from '../config.json';
 import bgMusicUrl from '../bg-music.mp3';
-import kickSoundUrl from '../ball-kick.mp3';
 
 const WIDTH = 900;
 const HEIGHT = 420;
@@ -101,7 +100,6 @@ function Game() {
   const gameWrapRef = useRef(null);
   const gameRef = useRef(null);
   const musicRef = useRef(null);
-  const kickAudioRef = useRef(null);
   const [status, setStatus] = useState('ready');
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(() => Number(localStorage.getItem('boy-ball-best') || 0));
@@ -112,15 +110,11 @@ function Game() {
     const music = new Audio(bgMusicUrl);
     music.loop = true;
     music.volume = gameConfig.audio.backgroundVolume;
-    const kickSound = new Audio(kickSoundUrl);
-    kickSound.volume = gameConfig.audio.kickVolume;
     musicRef.current = music;
-    kickAudioRef.current = kickSound;
     return () => {
       music.pause();
       music.currentTime = 0;
       musicRef.current = null;
-      kickAudioRef.current = null;
     };
   }, []);
 
@@ -145,8 +139,6 @@ function Game() {
     const ballIsGrounded = g.ballY >= restingY - 0.5 && g.ballVY >= 0;
     if (!ballIsGrounded) return;
 
-    const kickSound = kickAudioRef.current;
-    if (kickSound) { kickSound.currentTime = 0; kickSound.play().catch(() => {}); }
     g.ballVY = -gameConfig.ball.jumpVelocity;
     g.kick = 1;
   }, []);
