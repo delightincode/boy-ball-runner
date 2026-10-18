@@ -133,7 +133,7 @@ function Game() {
 
   const startGame = useCallback(() => {
     if (musicEnabled && musicRef.current?.paused) musicRef.current.play().catch(() => {});
-    gameRef.current = { running: true, over: false, score: 0, speed: gameConfig.obstacles.startSpeed, boyY: GROUND - 118, ballY: GROUND - gameConfig.ball.restingOffset, ballVY: 0, ballX: 125, ballSpin: 0, kick: 0, obstacles: [], spawn: gameConfig.obstacles.initialSpawnFrames, frame: 0, clouds: [{x: 120,y:78,s:1},{x:430,y:115,s:.75},{x:760,y:64,s:1.1}], groundShift: 0 };
+    gameRef.current = { running: true, over: false, score: 0, speed: gameConfig.obstacles.startSpeed, boyY: GROUND - 118, ballY: GROUND - gameConfig.ball.restingOffset, ballVY: 0, ballX: 125, ballSpin: 0, kick: 0, obstacles: [], spawn: gameConfig.obstacles.initialSpawnFrames * gameConfig.obstacles.spawnReferenceSpeed / gameConfig.obstacles.startSpeed, frame: 0, clouds: [{x: 120,y:78,s:1},{x:430,y:115,s:.75},{x:760,y:64,s:1.1}], groundShift: 0 };
     setScore(0); setStatus('playing');
   }, [musicEnabled]);
 
@@ -167,8 +167,12 @@ function Game() {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     let raf;
-    const render = () => {
+    let lastTimestamp = null;
+    let accumulator = 0;
+    const render = (timestamp) => {
       const g = gameRef.current;
+      const elapsed = lastTimestamp === null ? 1 / 60 : Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+      lastTimestamp = timestamp;
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
       // Bầu trời
       // Clear morning sky on the walk to school.
@@ -204,25 +208,31 @@ function Game() {
 
 
       if (g?.running) {
-        g.frame++;
-        g.speed = Math.min(gameConfig.obstacles.maxSpeed, gameConfig.obstacles.startSpeed + g.score * gameConfig.obstacles.speedIncreasePerPoint);
-        g.score += gameConfig.scoring.pointsPerFrame; g.groundShift = (g.groundShift + g.speed) % 59;
-        g.kick = Math.max(0, g.kick - .09);
-        g.ballVY += gameConfig.ball.gravity; g.ballY += g.ballVY; g.ballSpin += .11;
-        if (g.ballY > GROUND - gameConfig.ball.restingOffset) { g.ballY = GROUND - gameConfig.ball.restingOffset; g.ballVY = 0; }
-        // Bóng lăn theo cậu bé khi đang sát đất
-        g.ballX = 126 + (g.kick > .45 ? 5 : 0);
-        g.spawn--;
-        if (g.spawn <= 0) { g.obstacles.push({x: WIDTH + 15, type: Math.random() < .4 ? 'books' : Math.random() < .72 ? 'backpack' : 'pencil', passed: false}); g.spawn = gameConfig.obstacles.spawnIntervalMin + Math.random()*gameConfig.obstacles.spawnIntervalRandom - g.speed*gameConfig.obstacles.spawnSpeedReduction; }
-        g.obstacles.forEach(o => { o.x -= g.speed; if (!o.passed && o.x + 42 < 155) { o.passed = true; g.score += gameConfig.scoring.pointsPerObstacle; } });
-        g.obstacles = g.obstacles.filter(o => o.x > -60);
-        // Bóng cần ở trên đỉnh vật cản lúc đi ngang qua
-        for (const o of g.obstacles) {
-          const overlaps = o.x < 145 && o.x + 42 > 112;
-          const clears = g.ballY < GROUND - gameConfig.ball.clearanceHeight;
-          if (overlaps && !clears) { g.running = false; g.over = true; break; }
+        accumulator += elapsed * 60;
+        while (accumulator >= 1 && g.running) {
+          g.frame++;
+          g.speed = Math.min(gameConfig.obstacles.maxSpeed, gameConfig.obstacles.startSpeed + g.score * gameConfig.obstacles.speedIncreasePerPoint);
+          g.score += gameConfig.scoring.pointsPerFrame; g.groundShift = (g.groundShift + g.speed) % 59;
+          g.kick = Math.max(0, g.kick - .09);
+          g.ballVY += gameConfig.ball.gravity; g.ballY += g.ballVY; g.ballSpin += .11;
+          if (g.ballY > GROUND - gameConfig.ball.restingOffset) { g.ballY = GROUND - gameConfig.ball.restingOffset; g.ballVY = 0; }
+          // Bóng lăn theo cậu bé khi đang sát đất
+          g.ballX = 126 + (g.kick > .45 ? 5 : 0);
+          g.spawn--;
+          if (g.spawn <= 0) { g.obstacles.push({x: WIDTH + 15, type: Math.random() < .4 ? 'books' : Math.random() < .72 ? 'backpack' : 'pencil', passed: false}); g.spawn = (gameConfig.obstacles.spawnIntervalMin + Math.random() * gameConfig.obstacles.spawnIntervalRandom - gameConfig.obstacles.spawnReferenceSpeed * gameConfig.obstacles.spawnSpeedReduction) * gameConfig.obstacles.spawnReferenceSpeed / g.speed; }
+          g.obstacles.forEach(o => { o.x -= g.speed; if (!o.passed && o.x + 42 < 155) { o.passed = true; g.score += gameConfig.scoring.pointsPerObstacle; } });
+          g.obstacles = g.obstacles.filter(o => o.x > -60);
+          // Bóng cần ở trên đỉnh vật cản lúc đi ngang qua
+          for (const o of g.obstacles) {
+            const overlaps = o.x < 145 && o.x + 42 > 112;
+            const clears = g.ballY < GROUND - gameConfig.ball.clearanceHeight;
+            if (overlaps && !clears) { g.running = false; g.over = true; break; }
+          }
+          if (g.frame % 8 === 0) setScore(Math.floor(g.score));
+        accumulator -= 1;
         }
-        if (g.frame % 8 === 0) setScore(Math.floor(g.score));
+      } else {
+        accumulator = 0;
       }
       drawBoy(ctx, 63, g?.boyY ?? GROUND - 118, g?.kick ?? 0, g?.frame ?? 0);
       drawBall(ctx, g?.ballX ?? 126, g?.ballY ?? GROUND - 19, g?.ballSpin ?? 0);
@@ -234,7 +244,7 @@ function Game() {
       }
       raf = requestAnimationFrame(render);
     };
-    render();
+    raf = requestAnimationFrame(render);
     return () => cancelAnimationFrame(raf);
   }, []);
 

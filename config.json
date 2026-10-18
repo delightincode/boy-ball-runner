@@ -1,6 +1,6 @@
 {
   "obstacles": {
-    "startSpeed": 5,
+    "startSpeed": 8,
     "maxSpeed": 10,
     "speedIncreasePerPoint": 0.001818,
     "initialSpawnFrames": 75,
@@ -9,12 +9,13 @@
     "spawnSpeedReduction": 2,
     "bookStackHeight": 48,
     "backpackHeight": 39,
-    "pencilHeight": 46
+    "pencilHeight": 46,
+    "spawnReferenceSpeed": 4
   },
   "ball": {
     "restingOffset": 19,
     "jumpVelocity": 12.8,
-    "gravity": 0.52,
+    "gravity": 0.6,
     "clearanceHeight": 50
   },
   "scoring": {
