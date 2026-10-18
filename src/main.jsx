@@ -50,10 +50,52 @@ function drawBoy(ctx, x, y, kick, frame = 0) {
   ctx.strokeStyle = '#f2b889'; ctx.lineWidth = 7;
   ctx.beginPath(); ctx.moveTo(x + 29, y + 54); ctx.lineTo(x + 16, y + 72 + step * .35); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x + 62, y + 54); ctx.lineTo(x + 75, y + 69 - step * .35); ctx.stroke();
-  ctx.fillStyle = '#f2b889'; ctx.beginPath(); ctx.arc(x + 46, y + 27, 23, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#49352d'; ctx.beginPath(); ctx.arc(x + 45, y + 17, 22, Math.PI, Math.PI * 2); ctx.lineTo(x + 66, y + 29); ctx.quadraticCurveTo(x + 55, y + 23, x + 48, y + 28); ctx.quadraticCurveTo(x + 39, y + 21, x + 26, y + 30); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#26384a'; ctx.beginPath(); ctx.arc(x + 54, y + 29, 2.5, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#a75d49'; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.arc(x + 56, y + 35, 5, .2, 1.4); ctx.stroke();
+  // Smaller front-facing face under a continuous school cap.
+  ctx.save();
+  ctx.translate(x + 46, y + 27);
+
+  ctx.fillStyle = '#f2b889';
+  ctx.beginPath();
+  ctx.moveTo(-18, -10);
+  ctx.quadraticCurveTo(-18, -21, 0, -22);
+  ctx.quadraticCurveTo(18, -21, 18, -10);
+  ctx.lineTo(18, 2);
+  ctx.quadraticCurveTo(16, 15, 0, 20);
+  ctx.quadraticCurveTo(-16, 15, -18, 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // One connected hat silhouette prevents a gap between crown and brim.
+  ctx.fillStyle = '#315f85';
+  ctx.beginPath();
+  ctx.moveTo(-22, 5);
+  ctx.lineTo(-22, -9);
+  ctx.quadraticCurveTo(-24, -22, -13, -26);
+  ctx.quadraticCurveTo(0, -33, 13, -26);
+  ctx.quadraticCurveTo(24, -21, 22, -9);
+  ctx.lineTo(22, 5);
+  ctx.quadraticCurveTo(0, 3, -22, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Front brim overlaps the cap body slightly so the join stays seamless.
+  ctx.fillStyle = '#3d79a8';
+  ctx.beginPath();
+  ctx.moveTo(-22, -9);
+  ctx.quadraticCurveTo(0, -5, 22, -9);
+  ctx.lineTo(22, 5);
+  ctx.quadraticCurveTo(0, 3, -22, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Centered curved smile.
+  ctx.strokeStyle = '#a75d49';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(-5, 7);
+  ctx.quadraticCurveTo(0, 12, 5, 7);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawBall(ctx, x, y, spin) {
@@ -194,9 +236,12 @@ function Game() {
       ctx.fillStyle = '#e6dcc8'; ctx.fillRect(0, 286, WIDTH, GROUND - 286);
       ctx.fillStyle = '#70858c'; ctx.fillRect(0, GROUND, WIDTH, HEIGHT - GROUND);
       ctx.strokeStyle = '#f8e8b6'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, GROUND); ctx.lineTo(WIDTH, GROUND); ctx.stroke();
+      if (g?.running) {
+        g.groundShift = (g.groundShift + g.speed * 0.5 * elapsed * 60) % 92;
+      }
       const shift = g?.groundShift || 0;
       ctx.fillStyle = 'rgba(255,255,255,.64)';
-      for (let i = 0; i < 13; i++) { const x = ((i*92 - shift*1.6) % (WIDTH+40) + WIDTH+40)%(WIDTH+40); roundedRect(ctx, x, GROUND+46, 47, 7, 3, 'rgba(255,255,255,.62)'); }
+      for (let i = -1; i <= Math.ceil(WIDTH / 92); i++) { const x = i * 92 - shift; roundedRect(ctx, x, GROUND+46, 47, 7, 3, 'rgba(255,255,255,.62)'); }
 
 
       if (g?.running) {
@@ -204,7 +249,7 @@ function Game() {
         while (accumulator >= 1 && g.running) {
           g.frame++;
           g.speed = Math.min(gameConfig.obstacles.maxSpeed, gameConfig.obstacles.startSpeed + g.score * gameConfig.obstacles.speedIncreasePerPoint);
-          g.score += gameConfig.scoring.pointsPerFrame; g.groundShift = (g.groundShift + g.speed) % 59;
+          g.score += gameConfig.scoring.pointsPerFrame;
           g.kick = Math.max(0, g.kick - .09);
           g.ballVY += gameConfig.ball.gravity; g.ballY += g.ballVY; g.ballSpin += .11;
           if (g.ballY > GROUND - gameConfig.ball.restingOffset) { g.ballY = GROUND - gameConfig.ball.restingOffset; g.ballVY = 0; }
